@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JudgeIT — Avanade D&AI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0d1117 0%, #161b27 50%, #0d1117 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #e6edf3;
+      overflow: hidden;
+    }
+
+    /* ── Loading ── */
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 16px;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(255,255,255,0.08);
+      border-top-color: #ff4d6d;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: #8b949e; font-size: 15px; }
+
+    /* ── App shell ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 460px;
+      height: 100vh;
+      padding: 12px 16px 8px;
+    }
+
+    header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #ff4d6d, #ff9a3c);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+    .stats {
+      font-size: 13px;
+      color: #8b949e;
+      background: rgba(255,255,255,0.05);
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Progress bar */
+    .progress-track {
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff4d6d, #ff9a3c);
+      border-radius: 2px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Card stack ── */
+    .card-stack {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
+    }
+
+    .card {
+      position: absolute;
+      width: calc(100% - 8px);
+      max-width: 420px;
+      border-radius: 20px;
+      background: #1c2333;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+      transform-origin: 50% 110%;
+      will-change: transform;
+    }
+    .card:active { cursor: grabbing; }
+    .card.is-top   { z-index: 10; }
+    .card.behind-1 { transform: scale(0.97) translateY(10px); z-index: 9; pointer-events: none; }
+    .card.behind-2 { transform: scale(0.94) translateY(20px); z-index: 8; pointer-events: none; }
+
+    /* Swipe overlays */
+    .swipe-badge {
+      position: absolute;
+      top: 24px;
+      padding: 6px 16px;
+      border-radius: 8px;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      border: 3px solid;
+      opacity: 0;
+      pointer-events: none;
+      text-transform: uppercase;
+      z-index: 20;
+    }
+    .swipe-badge.approve { right: 18px; color: #4ade80; border-color: #4ade80; }
+    .swipe-badge.reject  { left: 18px;  color: #f87171; border-color: #f87171; }
+
+    /* Card media */
+    .card-image {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+      display: block;
+      background: #0d1117;
+    }
+    .card-no-image {
+      width: 100%;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+      background: linear-gradient(135deg, #161b27, #0d1117);
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 14px 16px 10px;
+    }
+    .team-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 3px 10px 3px 4px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .team-dot {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .challenge-q {
+      font-size: 13px;
+      line-height: 1.55;
+      color: #8b949e;
+      margin-bottom: 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .submission-text {
+      font-size: 15px;
+      line-height: 1.65;
+      color: #e6edf3;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      padding: 10px 12px;
+      border-radius: 10px;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+    .submission-text::-webkit-scrollbar { width: 3px; }
+    .submission-text::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+    /* Card footer */
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 16px;
+      background: rgba(0,0,0,0.25);
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 10px;
+    }
+    .submission-meta {
+      font-size: 11px;
+      color: #6e7681;
+    }
+    .points-pill {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(255,154,60,0.15);
+      color: #ff9a3c;
+      border: 1px solid rgba(255,154,60,0.25);
+    }
+    .components-hint {
+      font-size: 11px;
+      color: #6e7681;
+      padding: 6px 16px 8px;
+      line-height: 1.4;
+    }
+
+    /* ── Action buttons ── */
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 14px 0 12px;
+      width: 100%;
+    }
+    .btn-action {
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s, box-shadow 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-action:hover  { transform: scale(1.12); }
+    .btn-action:active { transform: scale(0.92); }
+
+    .btn-reject {
+      width: 62px; height: 62px;
+      font-size: 26px;
+      background: rgba(248,113,113,0.1);
+      color: #f87171;
+      border: 2px solid rgba(248,113,113,0.4);
+      box-shadow: 0 0 20px rgba(248,113,113,0.1);
+    }
+    .btn-skip {
+      width: 44px; height: 44px;
+      font-size: 18px;
+      background: rgba(255,255,255,0.04);
+      color: #6e7681;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .btn-rate {
+      width: 44px; height: 44px;
+      font-size: 20px;
+      background: rgba(96,165,250,0.1);
+      color: #60a5fa;
+      border: 1px solid rgba(96,165,250,0.3);
+    }
+    .btn-approve {
+      width: 62px; height: 62px;
+      font-size: 26px;
+      background: rgba(74,222,128,0.1);
+      color: #4ade80;
+      border: 2px solid rgba(74,222,128,0.4);
+      box-shadow: 0 0 20px rgba(74,222,128,0.1);
+    }
+
+    .btn-hint {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+    .btn-label {
+      font-size: 10px;
+      color: #6e7681;
+    }
+
+    /* Keyboard shortcuts bar */
+    .shortcuts {
+      font-size: 11px;
+      color: #3d444d;
+      padding-bottom: 8px;
+    }
+
+    /* ── Done screen ── */
+    .done-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      text-align: center;
+      padding: 40px 20px;
+      height: 100%;
+    }
+    .done-emoji { font-size: 72px; }
+    .done-title { font-size: 28px; font-weight: 800; }
+    .done-sub   { color: #8b949e; line-height: 1.7; max-width: 280px; }
+    .btn-reload {
+      margin-top: 8px;
+      padding: 12px 28px;
+      border-radius: 14px;
+      background: linear-gradient(90deg, #ff4d6d, #ff9a3c);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* ── Score modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 100;
+      padding: 0 12px 16px;
+    }
+    .modal-sheet {
+      background: #1c2333;
+      border-radius: 24px 24px 20px 20px;
+      padding: 22px 20px 20px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 -8px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+      animation: slideUp 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .modal-handle {
+      width: 36px; height: 4px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px;
+      margin: 0 auto 18px;
+    }
+    .modal-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .modal-sub {
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 18px;
+    }
+    .score-grid {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .score-btn {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.04);
+      color: #e6edf3;
+      font-size: 19px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.14s;
+    }
+    .score-btn:hover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
+    .score-btn.sel {
+      background: linear-gradient(135deg, #ff4d6d, #ff9a3c);
+      border-color: transparent;
+      transform: scale(1.12);
+      box-shadow: 0 4px 16px rgba(255,77,109,0.4);
+    }
+    .comment-box {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 11px 13px;
+      color: #e6edf3;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      height: 72px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    .comment-box:focus { border-color: rgba(255,255,255,0.25); }
+    .comment-box::placeholder { color: #3d444d; }
+    .modal-row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-cancel {
+      flex: 1;
+      padding: 13px;
+      border-radius: 13px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: transparent;
+      color: #8b949e;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .btn-submit {
+      flex: 2;
+      padding: 13px;
+      border-radius: 13px;
+      border: none;
+      background: linear-gradient(90deg, #ff4d6d, #ff9a3c);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-submit:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%) translateY(0);
+      background: rgba(22,27,39,0.92);
+      color: #e6edf3;
+      padding: 10px 22px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(12px);
+      z-index: 300;
+      white-space: nowrap;
+      animation: toastIn 0.18s ease, toastOut 0.25s ease 1.7s forwards;
+      pointer-events: none;
+    }
+    @keyframes toastIn  { from { opacity:0; transform: translateX(-50%) translateY(12px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+    @keyframes toastOut { from { opacity:1; } to { opacity:0; transform: translateX(-50%) translateY(-8px); } }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading submissions…</p>
+</div>
+
+<!-- Main app -->
+<div id="app" class="hidden">
+  <header>
+    <div class="logo">JudgeIT</div>
+    <div class="stats" id="stats">— / —</div>
+  </header>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+  </div>
+
+  <div class="card-stack" id="card-stack"></div>
+
+  <div class="actions" id="actions">
+    <div class="btn-hint">
+      <button class="btn-action btn-reject" id="btn-reject" title="Reject — 0 pts (← key)">✗</button>
+      <span class="btn-label">0 pts</span>
+    </div>
+    <div class="btn-hint">
+      <button class="btn-action btn-skip" id="btn-skip" title="Skip (↓ key)">↷</button>
+      <span class="btn-label">skip</span>
+    </div>
+    <div class="btn-hint">
+      <button class="btn-action btn-rate" id="btn-rate" title="Rate (↑ / Enter)">★</button>
+      <span class="btn-label">score</span>
+    </div>
+    <div class="btn-hint">
+      <button class="btn-action btn-approve" id="btn-approve" title="Approve — full pts (→ key)">♥</button>
+      <span class="btn-label">full pts</span>
+    </div>
+  </div>
+
+  <div class="shortcuts">← reject &nbsp;|&nbsp; → approve &nbsp;|&nbsp; ↑ rate &nbsp;|&nbsp; ↓ skip</div>
+</div>
+
+<!-- Score modal -->
+<div id="score-modal" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title">Rate this submission</div>
+    <div class="modal-sub" id="modal-sub">Select a score from 0 to max points</div>
+    <div class="score-grid" id="score-grid"></div>
+    <textarea class="comment-box" id="comment-box" placeholder="Add a comment for the team (optional)…"></textarea>
+    <div class="modal-row">
+      <button class="btn-cancel" id="btn-cancel">Cancel</button>
+      <button class="btn-submit" id="btn-submit" disabled>Submit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API   = 'https://avanade-data-ai-app.nl-dot.com/api';
+  const TOKEN = '1q2w3e$R%T^Y';
+
+  // ── State ──────────────────────────────────────────────
+  let queue      = [];   // items yet to judge
+  let challenges = {};   // id → challenge
+  let teams      = {};   // team_letter → team
+
+  // ── API helpers ────────────────────────────────────────
+  function apiFetch(path, opts = {}) {
+    return fetch(API + path, {
+      ...opts,
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+        ...(opts.headers || {})
+      }
+    }).then(r => r.json());
+  }
+
+  // ── Bootstrap ──────────────────────────────────────────
+  async function init() {
+    try {
+      const [items, challengeList, teamList, scores] = await Promise.all([
+        apiFetch('/entities/LoggedItem'),
+        apiFetch('/entities/Challenge'),
+        apiFetch('/entities/Team'),
+        apiFetch('/entities/JudgeScore')
+      ]);
+
+      challenges = Object.fromEntries(challengeList.map(c => [c.id, c]));
+      teams      = Object.fromEntries(teamList.map(t => [t.team_letter, t]));
+
+      const humanScoredIds = new Set(
+        scores.filter(s => s.judge_type === 'human').map(s => s.logged_item_id)
+      );
+
+      // Filter non-sample, unscored items; photos first then dreams
+      queue = items
+        .filter(i => !i.is_sample && !humanScoredIds.has(i.id))
+        .sort((a, b) => {
+          if (a.type === 'photo' && b.type !== 'photo') return -1;
+          if (a.type !== 'photo' && b.type === 'photo') return  1;
+          return new Date(b.created_date) - new Date(a.created_date);
+        });
+
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      updateStats();
+      renderStack();
+      bindButtons();
+    } catch (err) {
+      document.getElementById('loading').innerHTML =
+        `<p style="color:#f87171;padding:24px;text-align:center">Failed to load:<br>${err.message}</p>`;
+    }
+  }
+
+  // ── Stats / progress ───────────────────────────────────
+  let totalStartCount = 0;
+  function updateStats() {
+    if (!totalStartCount) totalStartCount = queue.length;
+    const judged    = totalStartCount - queue.length;
+    const remaining = queue.length;
+    document.getElementById('stats').textContent = `${judged} / ${totalStartCount}`;
+    const pct = totalStartCount > 0 ? (judged / totalStartCount) * 100 : 0;
+    document.getElementById('progress-fill').style.width = `${pct}%`;
+  }
+
+  // ── Card rendering ─────────────────────────────────────
+  function renderStack() {
+    const stack = document.getElementById('card-stack');
+    stack.innerHTML = '';
+
+    if (queue.length === 0) {
+      stack.innerHTML = `
+        <div class="done-screen">
+          <div class="done-emoji">🏆</div>
+          <div class="done-title">All done!</div>
+          <div class="done-sub">You've judged all ${totalStartCount} submissions.<br>Excellent work, judge!</div>
+          <button class="btn-reload" onclick="location.reload()">Review again</button>
+        </div>`;
+      document.getElementById('actions').classList.add('hidden');
+      return;
+    }
+
+    // Render top 3 (back to front so top card is last child = visually on top)
+    const slice = queue.slice(0, 3);
+    slice.reverse().forEach((item, idx) => {
+      const isTop = idx === slice.length - 1;
+      const card  = buildCard(item, isTop, slice.length - 1 - idx);
+      stack.appendChild(card);
+    });
+
+    attachDrag(stack.querySelector('.card.is-top'));
+  }
+
+  function buildCard(item, isTop, stackPos) {
+    const ch   = challenges[item.challenge_id] || {};
+    const team = teams[item.team_id] || {};
+
+    const color    = team.colour || '#888';
+    const teamName = team.name   || `Team ${item.team_id}`;
+    const maxPts   = ch.points   || 3;
+    const typeLabel = (ch.type || item.type || '').toLowerCase();
+
+    const card = document.createElement('div');
+    card.className = 'card' + (isTop ? ' is-top' : stackPos === 1 ? ' behind-1' : ' behind-2');
+    card.dataset.id = item.id;
+
+    // Media
+    let media = '';
+    if (item.image_url) {
+      media = `<img class="card-image" src="${item.image_url}" alt="Submission"
+                    onerror="this.parentElement.querySelector('.fallback-icon').style.display='flex';this.style.display='none'">
+               <div class="card-no-image fallback-icon" style="display:none">📸</div>`;
+    } else {
+      const icon = item.type === 'dream' ? '💡' : '📝';
+      media = `<div class="card-no-image">${icon}</div>`;
+    }
+
+    // Submission content
+    const hasContent = item.content && item.content.trim();
+    const contentHtml = hasContent
+      ? `<div class="submission-text">${esc(item.content)}</div>`
+      : '';
+
+    // Scoring components hint
+    const hint = ch.components
+      ? `<div class="components-hint">Criteria: ${esc(ch.components)}</div>`
+      : '';
+
+    card.innerHTML = `
+      <div class="swipe-badge approve">NICE!</div>
+      <div class="swipe-badge reject">NOPE</div>
+      ${media}
+      <div class="card-body">
+        <div class="team-badge" style="background:${color}18;color:${color};border:1px solid ${color}35">
+          <div class="team-dot" style="background:${color}"></div>
+          ${esc(teamName)}
+        </div>
+        <div class="challenge-q">${esc(ch.question_text || 'Challenge details unavailable')}</div>
+        ${contentHtml}
+      </div>
+      ${hint}
+      <div class="card-footer">
+        <div class="submission-meta">${esc(typeLabel)} · Team ${esc(item.team_id)}</div>
+        <div class="points-pill">Max ${maxPts} pts</div>
+      </div>`;
+
+    return card;
+  }
+
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Drag / swipe ───────────────────────────────────────
+  function attachDrag(card) {
+    if (!card) return;
+    let startX = 0, startY = 0, dx = 0, active = false;
+
+    const approveEl = card.querySelector('.swipe-badge.approve');
+    const rejectEl  = card.querySelector('.swipe-badge.reject');
+
+    function onStart(e) {
+      active = true;
+      const p = e.touches ? e.touches[0] : e;
+      startX = p.clientX;
+      startY = p.clientY;
+      card.style.transition = 'none';
+    }
+
+    function onMove(e) {
+      if (!active) return;
+      const p  = e.touches ? e.touches[0] : e;
+      dx = p.clientX - startX;
+      const dy = (p.clientY - startY) * 0.25;
+      const rot = dx * 0.04;
+      card.style.transform = `translate(${dx}px,${dy}px) rotate(${rot}deg)`;
+
+      const progress = Math.min(Math.abs(dx) / 90, 1);
+      if (dx > 0) {
+        approveEl.style.opacity = progress;
+        rejectEl.style.opacity  = 0;
+      } else {
+        rejectEl.style.opacity  = progress;
+        approveEl.style.opacity = 0;
+      }
+    }
+
+    function onEnd() {
+      if (!active) return;
+      active = false;
+      if (dx > 90)       dismiss('right');
+      else if (dx < -90) dismiss('left');
+      else {
+        card.style.transition = 'transform 0.35s cubic-bezier(0.34,1.56,0.64,1)';
+        card.style.transform  = '';
+        approveEl.style.opacity = 0;
+        rejectEl.style.opacity  = 0;
+      }
+      dx = 0;
+    }
+
+    card.addEventListener('mousedown', onStart);
+    card.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchend', onEnd);
+  }
+
+  function dismiss(direction, scoreOverride, comment) {
+    const item  = queue[0];
+    if (!item) return;
+
+    const ch    = challenges[item.challenge_id] || {};
+    const maxPts = ch.points || 3;
+    const score = scoreOverride !== undefined ? scoreOverride
+                : direction === 'right' ? maxPts : 0;
+
+    const topCard = document.querySelector('.card.is-top');
+    if (topCard) {
+      topCard.style.transition = 'transform 0.3s ease-in, opacity 0.28s ease-in';
+      topCard.style.transform  = direction === 'right'
+        ? 'translate(160%,0) rotate(28deg)'
+        : 'translate(-160%,0) rotate(-28deg)';
+      topCard.style.opacity = '0';
+    }
+
+    const label = direction === 'right' ? '✓ Approved' : '✗ Rejected';
+    toast(`${label} — ${score}/${maxPts} pts`);
+    submitScore(item, score, comment || '');
+    queue.shift();
+
+    setTimeout(() => {
+      updateStats();
+      renderStack();
+    }, 280);
+  }
+
+  // ── Buttons ────────────────────────────────────────────
+  function bindButtons() {
+    document.getElementById('btn-approve').addEventListener('click', () => dismiss('right'));
+    document.getElementById('btn-reject').addEventListener('click',  () => dismiss('left'));
+    document.getElementById('btn-skip').addEventListener('click',    skipCurrent);
+    document.getElementById('btn-rate').addEventListener('click',    openModal);
+    document.getElementById('btn-cancel').addEventListener('click',  closeModal);
+    document.getElementById('btn-submit').addEventListener('click',  submitFromModal);
+
+    document.addEventListener('keydown', e => {
+      if (!document.getElementById('score-modal').classList.contains('hidden')) return;
+      if (e.key === 'ArrowRight') dismiss('right');
+      if (e.key === 'ArrowLeft')  dismiss('left');
+      if (e.key === 'ArrowDown')  skipCurrent();
+      if (e.key === 'ArrowUp' || e.key === 'Enter') openModal();
+    });
+  }
+
+  function skipCurrent() {
+    if (queue.length === 0) return;
+    const item = queue.shift();
+    queue.push(item);
+    renderStack();
+    toast('Skipped — moved to end');
+  }
+
+  // ── Score modal ────────────────────────────────────────
+  let selectedScore = null;
+
+  function openModal() {
+    if (queue.length === 0) return;
+    const item = queue[0];
+    const ch   = challenges[item.challenge_id] || {};
+    const maxPts = ch.points || 3;
+    const team = teams[item.team_id] || {};
+
+    document.getElementById('modal-title').textContent = `Rate: Team ${item.team_id}`;
+    document.getElementById('modal-sub').textContent =
+      `Select 0 – ${maxPts} pts  ·  ${ch.type || item.type || ''}`;
+
+    const grid = document.getElementById('score-grid');
+    grid.innerHTML = '';
+    selectedScore = null;
+    document.getElementById('btn-submit').disabled = true;
+    document.getElementById('comment-box').value = '';
+
+    for (let i = 0; i <= maxPts; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'score-btn';
+      btn.textContent = i;
+      btn.addEventListener('click', () => {
+        grid.querySelectorAll('.score-btn').forEach(b => b.classList.remove('sel'));
+        btn.classList.add('sel');
+        selectedScore = i;
+        document.getElementById('btn-submit').disabled = false;
+      });
+      grid.appendChild(btn);
+    }
+
+    document.getElementById('score-modal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('score-modal').classList.add('hidden');
+    selectedScore = null;
+  }
+
+  function submitFromModal() {
+    if (selectedScore === null) return;
+    const comment = document.getElementById('comment-box').value.trim();
+    closeModal();
+
+    const topCard = document.querySelector('.card.is-top');
+    if (topCard) {
+      topCard.style.transition = 'transform 0.28s ease-in, opacity 0.28s';
+      topCard.style.transform  = 'scale(0.85) translateY(-30px)';
+      topCard.style.opacity    = '0';
+    }
+
+    const item   = queue[0];
+    const ch     = challenges[item?.challenge_id] || {};
+    const maxPts = ch.points || 3;
+    toast(`★ Rated ${selectedScore}/${maxPts} pts`);
+    submitScore(item, selectedScore, comment);
+    queue.shift();
+
+    setTimeout(() => {
+      updateStats();
+      renderStack();
+    }, 260);
+  }
+
+  // ── API submit ─────────────────────────────────────────
+  async function submitScore(item, score, comment) {
+    try {
+      await apiFetch('/entities/JudgeScore', {
+        method: 'POST',
+        body: JSON.stringify({
+          judge_type:     'human',
+          logged_item_id: item.id,
+          team_id:        item.team_id,
+          score:          score,
+          comment:        comment
+        })
+      });
+    } catch (err) {
+      console.error('Score submit failed:', err);
+      toast('⚠ Score may not have saved');
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────
+  function toast(msg) {
+    document.querySelector('.toast')?.remove();
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2100);
+  }
+
+  // ── Go ─────────────────────────────────────────────────
+  init();
+</script>
+</body>
+</html>
